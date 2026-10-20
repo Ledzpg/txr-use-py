@@ -2,6 +2,7 @@ import json
 import os
 import shutil
 import subprocess
+import zlib
 import customtkinter as ctk
 from customtkinter import filedialog
 from pathlib import Path
@@ -10,6 +11,10 @@ from . import constants
 
 default_start_dir = None
 default_backup_dir = None
+
+# Remembers whether the currently loaded save used the newer "CMTA" container,
+# so json_to_sav rewraps Save/Save As output the same way it came in.
+source_has_magic = True
 
 json_data = None
 
@@ -269,14 +274,16 @@ def set_player_data(data: list[str]) -> None:
     global json_data
 
     data_count = len(data) - 1
-    # Check whether we have data or not; data count always on tail
-    if (data[data_count] != 294):    # As I said earlier, it's handy
+    # Check whether we have data or not; the tail element is a sentinel we skip.
+    # (Original code compared str.__sizeof__() to a magic number, which only
+    #  holds on the CPython build this tool was written for. Test emptiness.)
+    if any(v != '' for v in data[:data_count]):
         processed = []
 
         # preprocessor to convert from string to their respective data type
         for i in range(11):
-            # We check it first if it's not empty we processed th data 
-            if ((data[i]).__sizeof__() != 49):
+            # We check it first if it's not empty we processed th data
+            if data[i] != '':
                 # If we reached mileage, treat is as float and do processing on it
                 if i == 8:
                     conversion = round((float(data[i]) * 1000.001), 3)
@@ -290,7 +297,7 @@ def set_player_data(data: list[str]) -> None:
                 processed.append(conversion)
     
     # Now we check if we truly have empty entries back in player_data tab
-    if (data[data_count] != 294):
+    if any(v != '' for v in data[:data_count]):
         player_data = (
             json_data.get("root", {})
             .get("properties", {})
@@ -573,9 +580,44 @@ def check_is_player_data_complete() -> None:
 # ----- uesave-cli processes here ----- #
 
 def sav_to_json(path: str) -> None:
-    if path:
-        subprocess.run(['./bin/uesave', 'to-json', '-i', f'{path}', '-o', f'{constants.TMP_PATH}'])
-        
+    global source_has_magic
+
+    if not path:
+        return
+
+    with open(path, "rb") as file:
+        raw = file.read()
+
+    # Strip the newer "CMTA" container down to the bare GVAS payload uesave
+    # understands. Older saves have no magic and are passed through untouched.
+    source_has_magic = raw[:len(constants.SAVE_MAGIC)] == constants.SAVE_MAGIC
+    payload = raw[len(constants.SAVE_MAGIC):] if source_has_magic else raw
+
+    with open(constants.PAYLOAD_PATH, "wb") as file:
+        file.write(payload)
+
+    subprocess.run(['./bin/uesave', 'to-json', '-i', f'{constants.PAYLOAD_PATH}', '-o', f'{constants.TMP_PATH}'])
+
 def json_to_sav(path: str) -> None:
-    if path:
-        subprocess.run([f'./bin/uesave', 'from-json', '-i', f'{constants.TMP_PATH}', '-o', f'{path}'])
+    if not path:
+        return
+
+    subprocess.run([f'./bin/uesave', 'from-json', '-i', f'{constants.TMP_PATH}', '-o', f'{constants.PAYLOAD_PATH}'])
+
+    with open(constants.PAYLOAD_PATH, "rb") as file:
+        payload = file.read()
+
+    # Decide whether to rebuild the "CMTA" container. Prefer the format of the
+    # file we are overwriting; fall back to the loaded save's format.
+    rewrap = source_has_magic
+    if os.path.exists(path):
+        with open(path, "rb") as file:
+            rewrap = file.read(len(constants.SAVE_MAGIC)) == constants.SAVE_MAGIC
+
+    if rewrap:
+        # Trailing 4 bytes are a CRC32 (LE) over the payload minus those bytes.
+        crc = zlib.crc32(payload[:-4]) & 0xffffffff
+        payload = constants.SAVE_MAGIC + payload[:-4] + crc.to_bytes(4, "little")
+
+    with open(path, "wb") as file:
+        file.write(payload)

@@ -20,6 +20,18 @@ You can run this project simply by clone this project, install dependencies, for
 You can download packaged version of the program in [Releases](https://github.com/rafliard23/txr-use-py/releases/). To run the app, extract the files and start the ```txr_use.exe```
 
 
+## Fork notes
+
+This fork makes the editor work with the save format written by current Tokyo Xtreme Racer builds:
+
+- **Save container**: current saves are wrapped as `CMTA` + bare `GVAS` payload + a trailing little-endian CRC32 (computed over everything between the magic and the CRC). `utils/io.py` now strips the wrapper before `uesave to-json` and rebuilds it (with a fresh CRC32) after `from-json`. Older unwrapped saves still load and are written back unwrapped.
+- **Python 3.11+ crash**: `set_player_data` used `str.__sizeof__()` comparisons as an "is empty" test, which only held on Python 3.10 and raised `ValueError` on newer versions. It now checks for empty strings directly.
+- **Use uesave 0.6.2**: the app expects the JSON layout emitted by `uesave` 0.6.x. The 0.7.x releases use a different schema-based layout and are **not** compatible. Download `uesave_cli-x86_64-pc-windows-msvc.zip` from [trumank/uesave v0.6.2](https://github.com/trumank/uesave/releases/tag/v0.6.2) and put `uesave.exe` in `bin/` (this folder is git-ignored).
+
+Known limitation (also in upstream): the "Unlock vinyls/emblems/auras" patch raises `KeyError: 'UnlockAuras_0'` on saves that don't contain that key yet.
+
+Always keep a backup of your save; the editor writes one automatically (see below). Close the game (and pause Steam Cloud sync) before editing, otherwise the game overwrites your changes.
+
 ## Features
 <details>
 <summary>Click this section to expand all features</summary>

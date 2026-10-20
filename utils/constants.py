@@ -8,6 +8,13 @@ Modding server and everyone that contribute in this project!"
 
 TMP_PATH = "./bin/tmp/tmp.json"
 
+# Newer Tokyo Xtreme Racer saves wrap the raw GVAS blob in a small container:
+# a "CMTA" magic prefix, and a trailing CRC32 (little-endian) taken over
+# everything between the magic and the CRC itself. uesave only speaks bare
+# GVAS, so we strip the wrapper before to-json and rebuild it after from-json.
+SAVE_MAGIC = b"CMTA"
+PAYLOAD_PATH = "./bin/tmp/payload.sav"
+
 STATUS_STRINGS = ["Max CP", "CP", "Accumulated CP",
                   "BP", "Win", "Loss", "Draw",
                   "Win Streak", "Total Mileage", 
