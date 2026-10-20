@@ -22,6 +22,8 @@ You can download packaged version of the program in [Releases](https://github.co
 
 ## Fork notes
 
+**Tested with Tokyo Xtreme Racer game versions 1.5 and 1.6.**
+
 This fork makes the editor work with the save format written by current Tokyo Xtreme Racer builds:
 
 - **Save container**: current saves are wrapped as `CMTA` + bare `GVAS` payload + a trailing little-endian CRC32 (computed over everything between the magic and the CRC). `utils/io.py` now strips the wrapper before `uesave to-json` and rebuilds it (with a fresh CRC32) after `from-json`. Older unwrapped saves still load and are written back unwrapped.
